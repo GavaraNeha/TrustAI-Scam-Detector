@@ -1,140 +1,311 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>TrustAI</title>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>trustai - opportunity checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cream: '#FFFDF9', navy: '#1E1E24', coral: '#FF6B6B',
+                        mint: '#4ECDC4', sunshine: '#FFE66D', lavender: '#D4C5F9',
+                        peach: '#FFD166'
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'chunky': '4px 4px 0px #1E1E24',
+                        'chunky-sm': '2px 2px 0px #1E1E24',
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        body {
-            margin: 0;
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #cae9af, #d9c3f0);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .container {
-            backdrop-filter: blur(15px);
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 20px;
-            width: 60%;
-            text-align: center;
-            color: white;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-        }
-
-        textarea {
-            width: 100%;
-            height: 140px;
-            border-radius: 10px;
-            border: none;
-            padding: 10px;
-            font-size: 14px;
-        }
-
-        button {
-            margin-top: 20px;
-            padding: 12px 30px;
-            border-radius: 8px;
-            border: none;
-            background: #00c6ff;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-
-        button:hover {
-            background: #0072ff;
-            transform: scale(1.05);
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 20px;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.2);
-            animation: fadeIn 0.6s ease-in-out;
-        }
-
-        .progress {
-            height: 20px;
-            background: #ddd;
-            border-radius: 10px;
-            margin-top: 10px;
-        }
-
-        .bar {
-            height: 100%;
-            border-radius: 10px;
-            animation: grow 1s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            from {opacity: 0; transform: translateY(20px);}
-            to {opacity: 1; transform: translateY(0);}
-        }
-
-        @keyframes grow {
-            from {width: 0;}
-        }
+        html, body { height: 100%; margin: 0; overflow: hidden; }
+        body { background-color: #FFFDF9; color: #1E1E24; }
+        .chunky-border { border: 3px solid #1E1E24; }
+        .chunky-border-dashed { border: 3px dashed #1E1E24; }
+        ::-webkit-scrollbar { display: none; }
+        .lift-btn { transition: transform 0.15s ease; }
+        .lift-btn:hover { transform: translateY(-2px); }
+        .lift-btn:active { transform: translateY(0); }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+        .animate-wiggle { animation: wiggle 3s ease-in-out infinite; }
     </style>
 </head>
+<body class="h-full w-full flex flex-col overflow-hidden">
 
-<body>
-
-<div class="container">
-
-    <h1>🚀 TrustAI</h1>
-
-    <form method="POST" onsubmit="loading()">
-        <textarea name="message" placeholder="Paste job message..."></textarea><br>
-        <button id="btn">Analyze</button>
-    </form>
-
-    {% if result %}
-    <div class="result"
-        style="
-        color:
-        {% if 'Scam Likely' in result %} #ff4d4d
-        {% elif 'Suspicious' in result %} #ffb84d
-        {% else %} #22c55e 
-        {% endif %}
-        ">
-
-        <h2>Result</h2>
-        <p>{{ result }}</p>
-
-        {% set percent = result.split('(')[1].split('%')[0] | int %}
-
-        <div class="progress">
-            <div class="bar"
-                 style="
-                 width: {{ percent }}%;
-                 background:
-                 {% if percent >= 60 %} red
-                 {% elif percent >= 30 %}  #f97316
-                 {% else %} green
-                 {% endif %}
-                 ">
-            </div>
+    <div class="bg-navy text-cream px-5 py-3 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5 bg-navy/80 px-2.5 py-0.5 rounded-md border border-cream/20">
+            <i class="fa-solid fa-shield-cat text-sunshine text-xs"></i>
+            <span class="font-display font-bold text-xs tracking-wider">trustai_opportunity_checker.exe</span>
         </div>
-
-        <p>{{ percent }}% Risk</p>
-
+        <span class="text-xs font-mono bg-sunshine/20 text-sunshine px-2 py-0.5 rounded font-bold">LIVE CHECK: ON</span>
     </div>
-    {% endif %}
 
-</div>
+    <header class="bg-sunshine/30 px-5 py-3 border-b-3 border-navy flex items-center justify-between shrink-0">
+        <div class="bg-sunshine chunky-border px-2.5 py-1 rounded-lg shadow-chunky-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-magnifying-glass text-navy"></i>
+            <span class="font-display font-bold text-xs">Opportunity Radar</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+            <button type="button" onclick="setCategory('sms')" id="btn-sms" class="cat-btn lift-btn bg-coral text-navy chunky-border px-3 py-1 rounded-lg text-xs font-bold shadow-chunky-sm">SMS/Text</button>
+            <button type="button" onclick="setCategory('company')" id="btn-company" class="cat-btn lift-btn bg-cream text-navy chunky-border px-3 py-1 rounded-lg text-xs font-bold shadow-chunky-sm">Company</button>
+            <button type="button" onclick="setCategory('email')" id="btn-email" class="cat-btn lift-btn bg-cream text-navy chunky-border px-3 py-1 rounded-lg text-xs font-bold shadow-chunky-sm">Email</button>
+            <button type="button" onclick="setCategory('internship')" id="btn-internship" class="cat-btn lift-btn bg-cream text-navy chunky-border px-3 py-1 rounded-lg text-xs font-bold shadow-chunky-sm">Internship</button>
+        </div>
+    </header>
 
-<script>
-function loading() {
-    let btn = document.getElementById("btn");
-    btn.innerText = "Analyzing...";
-}
-</script>
+    <main class="flex-1 p-4 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-4 overflow-hidden min-h-0 bg-cream">
 
+        <form id="scam-form" class="md:col-span-5 bg-lavender chunky-border rounded-2xl shadow-chunky p-4 flex flex-col justify-between min-h-0">
+            <input type="hidden" name="category" id="category-input" value="sms">
+            <div class="overflow-y-auto min-h-0">
+                <h2 class="font-display font-bold text-sm mb-1">Paste the offer message</h2>
+                <p class="text-xs text-navy/70 mb-2">Job, internship, or opportunity text — we'll check if it's safe AND if it's actually worth your time.</p>
+                <textarea name="message" id="user-text-input" rows="6"
+                    class="w-full bg-cream chunky-border rounded-xl p-3 text-xs sm:text-sm resize-none mb-3"
+                    placeholder="Paste the message here..."></textarea>
+                <div class="chunky-border-dashed rounded-xl p-2.5 bg-cream/60">
+                    <div class="text-[11px] font-bold uppercase text-navy/70 mb-1"><i class="fa-solid fa-image text-coral"></i> or upload a screenshot</div>
+                    <input type="file" name="screenshot" id="screenshot-input" accept="image/*" class="text-xs">
+                </div>
+            </div>
+            <div class="mt-3 shrink-0">
+                <div id="form-error" class="hidden text-xs font-bold text-coral mb-2"></div>
+                <button type="submit" class="lift-btn w-full bg-coral text-navy font-display font-bold py-3 rounded-xl chunky-border shadow-chunky flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-wand-magic-sparkles animate-wiggle"></i> Check this opportunity
+                </button>
+            </div>
+        </form>
+
+        <section class="md:col-span-7 bg-cream chunky-border rounded-2xl shadow-chunky p-4 flex flex-col min-h-0 overflow-hidden">
+
+            <div id="state-empty" class="h-full flex flex-col items-center justify-center text-center p-4 my-auto">
+                <div class="w-16 h-16 bg-mint chunky-border rounded-2xl flex items-center justify-center mb-3 shadow-chunky">
+                    <i class="fa-solid fa-shield-halved text-2xl text-navy"></i>
+                </div>
+                <h3 class="font-display font-bold text-lg mb-1">Ready to check</h3>
+                <p class="text-xs text-navy/70 max-w-xs">You'll get two verdicts: is it safe, and is it actually worth your time.</p>
+            </div>
+
+            <div id="state-loading" class="h-full flex flex-col items-center justify-center text-center p-4 my-auto hidden">
+                <div class="w-16 h-16 bg-sunshine chunky-border rounded-2xl flex items-center justify-center mb-3 shadow-chunky animate-spin">
+                    <i class="fa-solid fa-gear text-2xl text-navy"></i>
+                </div>
+                <h3 class="font-display font-bold text-lg mb-1">Checking...</h3>
+                <p class="text-xs text-navy/70">Reading the message, checking the company, checking any links.</p>
+            </div>
+
+            <div id="state-not-opportunity" class="h-full flex flex-col items-center justify-center text-center p-4 my-auto hidden">
+                <div class="w-16 h-16 bg-lavender chunky-border rounded-2xl flex items-center justify-center mb-3 shadow-chunky">
+                    <i class="fa-solid fa-circle-info text-2xl text-navy"></i>
+                </div>
+                <h3 class="font-display font-bold text-lg mb-1">Not an opportunity message</h3>
+                <p id="relevance-reason" class="text-xs text-navy/70 max-w-sm"></p>
+            </div>
+
+            <div id="state-result" class="h-full flex flex-col min-h-0 hidden">
+                <div class="overflow-y-auto min-h-0 pr-1">
+
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div id="safety-banner" class="chunky-border rounded-xl p-3 shadow-chunky-sm">
+                            <span class="text-[10px] uppercase font-bold opacity-70">Safety</span>
+                            <h3 id="safety-title" class="font-display font-extrabold text-base">—</h3>
+                            <span id="safety-score" class="text-xs font-bold">0%</span>
+                        </div>
+                        <div id="worth-banner" class="chunky-border rounded-xl p-3 shadow-chunky-sm">
+                            <span class="text-[10px] uppercase font-bold opacity-70">Worth It</span>
+                            <h3 id="worth-title" class="font-display font-extrabold text-base">—</h3>
+                            <span id="worth-score" class="text-xs font-bold">0%</span>
+                        </div>
+                    </div>
+
+                    <div id="reasons-card" class="bg-white chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-flag text-coral"></i> Reasons:</h4>
+                        <ul id="reasons-list" class="space-y-1 text-xs"></ul>
+                    </div>
+
+                    <div id="questions-card" class="bg-white chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-circle-question text-coral"></i> Questions to ask them:</h4>
+                        <ul id="questions-list" class="space-y-1 text-xs"></ul>
+                    </div>
+
+                    <div id="evidence-card" class="bg-white chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-globe text-mint"></i> Evidence from the web:</h4>
+                        <ul id="evidence-list" class="space-y-1 text-xs"></ul>
+                    </div>
+
+                    <div id="reply-card" class="chunky-border rounded-xl p-3 bg-mint/30 shadow-chunky-sm hidden">
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1"><i class="fa-solid fa-lightbulb text-navy"></i> Send this back to verify:</h4>
+                        <pre id="replyText" class="text-xs font-semibold whitespace-pre-wrap font-sans"></pre>
+                        <button type="button" onclick="copyReply()" id="copy-reply-btn" class="lift-btn mt-2 bg-navy text-cream text-[11px] font-bold px-3 py-1.5 rounded-lg">copy reply</button>
+                    </div>
+                </div>
+
+                <div class="pt-2 mt-2 border-t border-navy/20 shrink-0">
+                    <button type="button" onclick="resetToEmpty()" class="lift-btn w-full bg-sunshine text-navy font-display font-bold py-2 rounded-xl chunky-border shadow-chunky-sm text-xs">
+                        <i class="fa-solid fa-rotate-left"></i> Check Another
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-navy text-cream/80 px-5 py-2 text-[11px] font-bold shrink-0 flex justify-between">
+        <span>trustai • checks safety AND resume value, not just scams</span>
+        <span id="status-text" class="text-sunshine font-mono">Status: Ready</span>
+    </footer>
+
+    <script>
+        const colorMap = { sms: 'bg-coral', company: 'bg-sunshine', email: 'bg-mint', internship: 'bg-lavender' };
+        function setCategory(cat) {
+            document.getElementById('category-input').value = cat;
+            document.querySelectorAll('.cat-btn').forEach(b => { b.classList.remove('bg-coral','bg-sunshine','bg-mint','bg-lavender'); b.classList.add('bg-cream'); });
+            const btn = document.getElementById('btn-' + cat);
+            btn.classList.remove('bg-cream'); btn.classList.add(colorMap[cat]);
+        }
+
+        function showState(name) {
+            ['state-empty','state-loading','state-not-opportunity','state-result'].forEach(id => {
+                document.getElementById(id).classList.toggle('hidden', id !== name);
+            });
+        }
+
+        document.getElementById('scam-form').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const errorBox = document.getElementById('form-error');
+            errorBox.classList.add('hidden');
+
+            const formData = new FormData(this);
+            const hasText = formData.get('message').trim().length > 0;
+            const hasFile = document.getElementById('screenshot-input').files.length > 0;
+            if (!hasText && !hasFile) {
+                errorBox.innerText = "Paste a message or upload a screenshot first.";
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            showState('state-loading');
+            document.getElementById('status-text').innerText = 'Status: Checking...';
+
+            try {
+                const res = await fetch('/analyze', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    errorBox.innerText = data.error || "Something went wrong.";
+                    errorBox.classList.remove('hidden');
+                    showState('state-empty');
+                    document.getElementById('status-text').innerText = 'Status: Ready';
+                    return;
+                }
+
+                if (!data.is_opportunity) {
+                    document.getElementById('relevance-reason').innerText = data.relevance_reason || '';
+                    showState('state-not-opportunity');
+                    document.getElementById('status-text').innerText = 'Status: Done';
+                    return;
+                }
+
+                renderResult(data);
+                showState('state-result');
+                document.getElementById('status-text').innerText = 'Status: Done';
+            } catch (err) {
+                errorBox.innerText = "Couldn't reach the server. Is it still running?";
+                errorBox.classList.remove('hidden');
+                showState('state-empty');
+                document.getElementById('status-text').innerText = 'Status: Ready';
+            }
+        });
+
+        function bannerColor(verdict) {
+            const map = {
+                'Safe': 'bg-mint text-navy', 'Suspicious': 'bg-peach text-navy',
+                'Scam Likely': 'bg-coral text-cream', "Can't Verify": 'bg-lavender text-navy',
+                'Strong': 'bg-mint text-navy', 'Decent': 'bg-peach text-navy',
+                'Weak': 'bg-coral text-cream', "Can't Tell": 'bg-lavender text-navy'
+            };
+            return map[verdict] || 'bg-lavender text-navy';
+        }
+
+        function renderResult(data) {
+            document.getElementById('safety-banner').className = `chunky-border rounded-xl p-3 shadow-chunky-sm ${bannerColor(data.safety_verdict)}`;
+            document.getElementById('safety-title').innerText = data.safety_verdict;
+            document.getElementById('safety-score').innerText = data.safety_score + '%';
+
+            document.getElementById('worth-banner').className = `chunky-border rounded-xl p-3 shadow-chunky-sm ${bannerColor(data.worth_verdict)}`;
+            document.getElementById('worth-title').innerText = data.worth_verdict;
+            document.getElementById('worth-score').innerText = data.worth_score + '%';
+
+            fillList('reasons-card', 'reasons-list', data.reasons, 'fa-circle-xmark text-coral');
+            fillList('questions-card', 'questions-list', data.questions_to_ask, 'fa-circle-question text-navy');
+
+            const evCard = document.getElementById('evidence-card');
+            const evList = document.getElementById('evidence-list');
+            evList.innerHTML = '';
+            if (data.evidence && data.evidence.length) {
+                data.evidence.forEach(item => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+                    a.href = item.url; a.target = '_blank';
+                    a.className = 'font-semibold underline decoration-dashed hover:text-coral';
+                    a.innerText = item.title;
+                    li.appendChild(a);
+                    evList.appendChild(li);
+                });
+                evCard.classList.remove('hidden');
+            } else {
+                evCard.classList.add('hidden');
+            }
+
+            const replyCard = document.getElementById('reply-card');
+            if (data.suggested_reply) {
+                document.getElementById('replyText').innerText = data.suggested_reply;
+                replyCard.classList.remove('hidden');
+            } else {
+                replyCard.classList.add('hidden');
+            }
+        }
+
+        function fillList(cardId, listId, items, iconClass) {
+            const card = document.getElementById(cardId);
+            const list = document.getElementById(listId);
+            list.innerHTML = '';
+            if (items && items.length) {
+                items.forEach(r => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-start gap-1.5 font-semibold';
+                    li.innerHTML = `<i class="fa-solid ${iconClass} mt-0.5"></i><span>${r}</span>`;
+                    list.appendChild(li);
+                });
+                card.classList.remove('hidden');
+            } else {
+                card.classList.add('hidden');
+            }
+        }
+
+        function resetToEmpty() {
+            document.getElementById('scam-form').reset();
+            document.getElementById('status-text').innerText = 'Status: Ready';
+            showState('state-empty');
+        }
+
+        function copyReply() {
+            navigator.clipboard.writeText(document.getElementById("replyText").innerText);
+            const btn = document.getElementById('copy-reply-btn');
+            const original = btn.innerText;
+            btn.innerText = 'copied!';
+            setTimeout(() => { btn.innerText = original; }, 1200);
+        }
+    </script>
 </body>
 </html>
