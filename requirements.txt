@@ -1,1 +1,6 @@
 flask
+requests
+python-dotenv
+pytesseract
+pillow
+python-whois
