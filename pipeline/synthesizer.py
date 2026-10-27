@@ -32,8 +32,8 @@ Evidence rules (important):
   NEUTRAL. Never list them as red flags.
 - trust_signals.official_link_domain or official_sender_domain = true is a strong
   legitimacy signal.
-- Missing stipend, role title or contact details is NOT a scam indicator by itself.
-  Mention it only in worth_it reasoning or in questions_to_ask.
+- Missing stipend, role title, sender or contact details is NOT a scam indicator by
+  itself. Mention it only in worth_it reasoning or in questions_to_ask, never in red_flags.
 - Do not mention numeric rule scores.
 - Put only genuine concerns in red_flags and only genuine positives in green_flags.
   Never put the same point in both. Each item: one sentence, under 25 words.
@@ -60,6 +60,16 @@ _NEUTRAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "Missing detail" flags (no stipend, sender not given...). Not scam signals:
+# they are dropped from red flags unless there is hard rule-based evidence.
+_MISSING_RE = re.compile(
+    r"\b(no|missing|not provided|not given|not listed|unverified|absent|lacks?|without)\b"
+    r".*\b(stipend|pay|salary|sender|contact|e-?mail domain|role title|job title|details|channel|description)\b"
+    r"|\b(stipend|pay|salary|sender|contact|e-?mail domain|role title|job title|details)\b"
+    r".*\b(missing|not provided|not given|not listed|unverified|absent|unknown|is vague)\b",
+    re.IGNORECASE,
+)
+
 
 def _dedupe(items):
     seen, out = set(), []
@@ -71,8 +81,11 @@ def _dedupe(items):
     return out
 
 
-def _drop_neutral(red):
-    return [r for r in red if not _NEUTRAL_RE.search(r)]
+def _clean_red_flags(red, rule_score):
+    red = [r for r in red if not _NEUTRAL_RE.search(r)]
+    if rule_score < 30:
+        red = [r for r in red if not _MISSING_RE.search(r)]
+    return red
 
 
 def _guardrails(result, rule_score, trust):
@@ -141,7 +154,7 @@ def synthesize(extracted, rule_score, rule_reasons, url_intel_results,
 
     result = _guardrails(result, rule_score, trust)
 
-    result["reasons"] = _dedupe(_drop_neutral(red))  # template shows `reasons` as red flags
+    result["reasons"] = _dedupe(_clean_red_flags(red, rule_score))  # UI shows `reasons` as red flags
     result["green_flags"] = _dedupe(list(green) + green_hints)
     result["questions_to_ask"] = (result.get("questions_to_ask") or [])[:MAX_QUESTIONS]
     result["_llm_unavailable"] = False
