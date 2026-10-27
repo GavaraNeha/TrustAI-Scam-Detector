@@ -1,6 +1,7 @@
 """
 Plain-code, no-LLM-needed safety rules. Runs on the raw text.
 Every rule uses \\b so it only matches whole words/phrases.
+Whitespace is flattened first so OCR line breaks can't split a phrase.
 """
 import re
 
@@ -53,8 +54,8 @@ REFUNDABLE_FEE_RE = _wb(r"\brefundable\b.{0,40}\b(deposit|registration|fee)\b")
 
 # "No fees are charged at any stage" must not count as asking for a fee.
 NEGATED_FEE_RE = _wb(
-    r"\b(?:no|zero|without)\s+(?:\w+\s+){0,2}(?:fees?|deposits?|charges?)\b"
-    r"(?:\s+(?:are|is|will\s+be)\s+(?:charged|required|asked|taken))?"
+    r"\b(?:no|zero|without)\s+(?:\w+\s+){0,2}(?:fees?|deposits?|charges?|payments?)\b"
+    r"(?:\s+(?:is|are|will\s+be)\s+(?:ever\s+)?(?:charged|required|asked|taken))?"
     r"(?:\s+at\s+any\s+(?:stage|point))?"
 )
 
@@ -62,11 +63,16 @@ EMAIL_RE = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
 RECRUITER_LOCAL_RE = _wb(r"hr|career|recruit|job|hiring|talent|placement|offer")
 
 
+def _flatten(text):
+    """OCR output has hard line breaks mid-sentence; collapse all whitespace."""
+    return " ".join((text or "").split())
+
+
 def check_text_rules(text, category=None):
     score = 0
     reasons = []
 
-    text = NEGATED_FEE_RE.sub(" ", text)
+    text = NEGATED_FEE_RE.sub(" ", _flatten(text))
 
     if PAY_FEE_RE.search(text):
         score += 40
@@ -107,10 +113,11 @@ def check_sender_domain(sender_email_domain, company_name):
 
 def check_emails_in_text(raw_text, company_name):
     """Fallback: a free-mail address that looks like a recruiter/company
-    contact (hr.xyz@gmail.com). Scan the RAW text, since redaction may mask emails."""
+    contact (hr.xyz@gmail.com). Scans the RAW text, since redaction may mask emails."""
     if not raw_text:
         return 0, []
 
+    raw_text = _flatten(raw_text)
     company_words = re.findall(r"[a-z0-9]+", (company_name or "").lower())
     for m in EMAIL_RE.finditer(raw_text):
         domain = m.group(1).lower()
