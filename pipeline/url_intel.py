@@ -1,27 +1,25 @@
 """
 Checks a URL two ways:
-- Domain age via WHOIS (no API key needed) -- very new domains are
-  a common scam signal.
-- VirusTotal URL reputation (free tier: 4 requests/min, 500/day,
-  non-commercial use only -- fine for a student project, not for
-  a monetized product).
+- Domain age via WHOIS (no API key needed).
+- VirusTotal URL reputation (free tier: 4 requests/min).
 
-VirusTotal's free tier is asynchronous for URLs it hasn't seen
-before: submitting a new URL queues an analysis that isn't ready
-instantly. This code submits it and reports "queued, check back
-later" rather than pretending to have a verdict it doesn't have.
+Every "no data" outcome (queued, skipped, error, WHOIS failure) is
+NEUTRAL. Only a real finding (young domain, malicious detections)
+counts against a link, and that is decided in the orchestrator.
 """
 import base64
-import time
+from datetime import datetime, timezone
+
 import requests
 import whois
 
 import config
+from pipeline.domain_utils import normalise_url, host_of
 
 
 def check_domain_age(url):
     try:
-        domain = url.split("//")[-1].split("/")[0].replace("www.", "")
+        domain = host_of(url).replace("www.", "")
         info = whois.whois(domain)
         creation = info.creation_date
         if isinstance(creation, list):
@@ -29,9 +27,12 @@ def check_domain_age(url):
         if not creation:
             return {"domain": domain, "age_days": None, "note": "Creation date not available"}
 
-        age_days = (time.time() - creation.timestamp()) / 86400
+        if creation.tzinfo is None:
+            creation = creation.replace(tzinfo=timezone.utc)
+        age_days = (datetime.now(timezone.utc) - creation).days
         return {"domain": domain, "age_days": int(age_days), "note": None}
     except Exception as e:
+        print(f"[WHOIS] {e}")
         return {"domain": None, "age_days": None, "note": f"WHOIS lookup failed: {e}"}
 
 
@@ -39,11 +40,11 @@ def check_virustotal(url):
     if not config.VIRUSTOTAL_API_KEY:
         return {"status": "skipped", "note": "No VIRUSTOTAL_API_KEY set"}
 
+    url = normalise_url(url)
     headers = {"x-apikey": config.VIRUSTOTAL_API_KEY}
     url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
 
     try:
-        # Try an existing report first (free, no quota cost for a cache hit).
         existing = requests.get(
             f"https://www.virustotal.com/api/v3/urls/{url_id}", headers=headers, timeout=15
         )
@@ -51,7 +52,6 @@ def check_virustotal(url):
             stats = existing.json()["data"]["attributes"]["last_analysis_stats"]
             return {"status": "analyzed", "stats": stats}
 
-        # Not seen before -- submit it. Result won't be ready instantly.
         submit = requests.post(
             "https://www.virustotal.com/api/v3/urls",
             headers=headers,
@@ -59,15 +59,21 @@ def check_virustotal(url):
             timeout=15,
         )
         submit.raise_for_status()
-        return {"status": "queued", "note": "First-time URL, VirusTotal is still analyzing it"}
+        return {"status": "queued", "note": "No reputation data yet (neutral, not a warning sign)"}
 
     except Exception as e:
+        print(f"[VirusTotal] {e}")
         return {"status": "error", "note": str(e)}
 
 
-def check_url(url):
+def check_url(url, official=False):
+    """official=True skips VirusTotal to save free-tier quota."""
+    if official:
+        vt = {"status": "skipped", "note": "Matches the company's official domain"}
+    else:
+        vt = check_virustotal(url)
     return {
         "url": url,
         "domain_age": check_domain_age(url),
-        "virustotal": check_virustotal(url),
+        "virustotal": vt,
     }
