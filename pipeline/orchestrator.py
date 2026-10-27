@@ -5,11 +5,15 @@ template renders. This is the one function app.py calls.
 Order: relevance gate -> extraction -> text rules -> company research
 (needed to know the official domains) -> URL checks -> synthesizer.
 """
+import re
+
 from pipeline.ingest import build_text, extract_urls
 from pipeline.redact import redact
 from pipeline.relevance import check_relevance
 from pipeline.extractor import extract_fields
-from pipeline.safety_rules import check_text_rules, check_sender_domain, check_emails_in_text
+from pipeline.safety_rules import (
+    check_text_rules, check_sender_domain, check_emails_in_text, FREEMAIL_DOMAINS,
+)
 from pipeline.url_intel import check_url
 from pipeline.company_intel import research_company
 from pipeline.value_scorer import build_value_context
@@ -17,9 +21,45 @@ from pipeline.synthesizer import synthesize
 from pipeline.reply_generator import generate_reply
 from pipeline.domain_utils import registered_domain, domain_label, company_slugs
 
+# Bare domains like careers.microsoft.com/apply (not part of an email address).
+_LINK_RE = re.compile(
+    r"(?<![@\w.-])(?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s,;)\]]*)?",
+    re.IGNORECASE,
+)
+_NOT_LINKS = {"e.g", "i.e"}
+
+
+def _find_links(text):
+    out = []
+    for m in _LINK_RE.finditer(" ".join((text or "").split())):
+        link = m.group(0).rstrip(".")
+        host = link.split("//")[-1].split("/")[0].lower()
+        if host in FREEMAIL_DOMAINS or host in _NOT_LINKS or "." not in host:
+            continue
+        out.append(link)
+    return out
+
+
+def _collect_urls(extracted, clean_text, raw_text):
+    urls = list(extracted.get("links_mentioned") or [])
+    try:
+        urls += list(extract_urls(clean_text) or [])
+    except Exception:
+        pass
+    urls += _find_links(raw_text)
+
+    seen, out = set(), []
+    for u in urls:
+        key = registered_domain(u) or u.lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(u)
+    return out
+
 
 def _assess_urls(results, official_domains, company_name):
-    """Deterministic URL risk. Returns (risk, red_flags, green_flags, official_hit)."""
+    """Deterministic URL risk. Returns (risk, red_flags, green_flags, official_hit).
+    Unknown data (WHOIS failed, VirusTotal queued) is neutral, never a red flag."""
     risk, red, green = 0, [], []
     official_hit = False
     slugs = company_slugs(company_name)
@@ -32,7 +72,10 @@ def _assess_urls(results, official_domains, company_name):
         detections = (stats.get("malicious", 0) or 0) + (stats.get("suspicious", 0) or 0)
 
         is_official = dom in official_domains or (
-            label in slugs and age is not None and age >= 730
+            label in slugs and (
+                (age is not None and age >= 730)
+                or (age is None and dom.endswith(".com"))  # exact name + .com, no WHOIS data
+            )
         )
 
         if is_official:
@@ -41,7 +84,7 @@ def _assess_urls(results, official_domains, company_name):
             continue
 
         if slugs and any(s in label for s in slugs):
-            risk += 30
+            risk += 60
             red.append(f"Link domain {dom} imitates the company name but is not its official site")
 
         if age is not None and age < 180:
@@ -86,7 +129,7 @@ def run(message, screenshot_file, category=None):
     company_research = research_company(company_name)
     official_domains = set(company_research.get("official_domains", []))
 
-    urls = extracted.get("links_mentioned") or extract_urls(clean_text)
+    urls = _collect_urls(extracted, clean_text, raw_text)
     url_intel_results = [
         check_url(u, official=registered_domain(u) in official_domains)
         for u in urls[:3]  # cap at 3 to protect free-tier quota
