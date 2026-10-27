@@ -4,3 +4,4 @@ python-dotenv
 pytesseract
 pillow
 python-whois
+gunicorn
