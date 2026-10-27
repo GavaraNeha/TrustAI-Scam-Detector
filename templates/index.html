@@ -130,8 +130,13 @@
                     </div>
 
                     <div id="reasons-card" class="bg-white chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
-                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-flag text-coral"></i> Reasons:</h4>
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-flag text-coral"></i> Red flags:</h4>
                         <ul id="reasons-list" class="space-y-1 text-xs"></ul>
+                    </div>
+
+                    <div id="green-card" class="bg-mint/20 chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
+                        <h4 class="font-display font-bold text-xs uppercase text-navy/70 mb-1.5"><i class="fa-solid fa-circle-check text-green-600"></i> Looks good:</h4>
+                        <ul id="green-list" class="space-y-1 text-xs"></ul>
                     </div>
 
                     <div id="questions-card" class="bg-white chunky-border rounded-xl p-3 mb-3 shadow-chunky-sm hidden">
@@ -247,6 +252,7 @@
             document.getElementById('worth-score').innerText = data.worth_score + '%';
 
             fillList('reasons-card', 'reasons-list', data.reasons, 'fa-circle-xmark text-coral');
+            fillList('green-card', 'green-list', data.green_flags, 'fa-circle-check text-green-600');
             fillList('questions-card', 'questions-list', data.questions_to_ask, 'fa-circle-question text-navy');
 
             const evCard = document.getElementById('evidence-card');
@@ -256,7 +262,7 @@
                 data.evidence.forEach(item => {
                     const li = document.createElement('li');
                     const a = document.createElement('a');
-                    a.href = item.url; a.target = '_blank';
+                    a.href = item.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
                     a.className = 'font-semibold underline decoration-dashed hover:text-coral';
                     a.innerText = item.title;
                     li.appendChild(a);
@@ -276,6 +282,8 @@
             }
         }
 
+        // Builds list items with textContent (not innerHTML) so text coming
+        // from the LLM or a scam message can never inject markup into the page.
         function fillList(cardId, listId, items, iconClass) {
             const card = document.getElementById(cardId);
             const list = document.getElementById(listId);
@@ -284,7 +292,12 @@
                 items.forEach(r => {
                     const li = document.createElement('li');
                     li.className = 'flex items-start gap-1.5 font-semibold';
-                    li.innerHTML = `<i class="fa-solid ${iconClass} mt-0.5"></i><span>${r}</span>`;
+                    const icon = document.createElement('i');
+                    icon.className = `fa-solid ${iconClass} mt-0.5`;
+                    const span = document.createElement('span');
+                    span.textContent = r;
+                    li.appendChild(icon);
+                    li.appendChild(span);
                     list.appendChild(li);
                 });
                 card.classList.remove('hidden');
