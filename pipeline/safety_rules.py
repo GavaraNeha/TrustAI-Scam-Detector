@@ -1,9 +1,6 @@
 """
 Plain-code, no-LLM-needed safety rules. Runs on the raw text.
-
-Word-boundary fixed: earlier versions matched "pay" as a substring,
-which flagged "Payment Gateway" in an unrelated diagram. Every rule
-here uses \\b so it only matches whole words/phrases.
+Every rule uses \\b so it only matches whole words/phrases.
 """
 import re
 
@@ -51,16 +48,25 @@ BASE_RULES = [
     (_wb(r"\btrainee kit\b|\bstarter kit\b|\btraining kit\b"), 25, "Asks you to buy a \"kit\" before starting — a known scam pattern"),
 ]
 
-# Pay-for-a-fee needs both words nearby, not just "pay" anywhere
-# (fixes the false positive on "Process Payment" / "Payment Gateway").
 PAY_FEE_RE = _wb(r"\bpay\b.{0,40}\b(fee|deposit|registration|kit)\b|\b(fee|deposit|registration|kit)\b.{0,40}\bpay\b")
-
 REFUNDABLE_FEE_RE = _wb(r"\brefundable\b.{0,40}\b(deposit|registration|fee)\b")
+
+# "No fees are charged at any stage" must not count as asking for a fee.
+NEGATED_FEE_RE = _wb(
+    r"\b(?:no|zero|without)\s+(?:\w+\s+){0,2}(?:fees?|deposits?|charges?)\b"
+    r"(?:\s+(?:are|is|will\s+be)\s+(?:charged|required|asked|taken))?"
+    r"(?:\s+at\s+any\s+(?:stage|point))?"
+)
+
+EMAIL_RE = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
+RECRUITER_LOCAL_RE = _wb(r"hr|career|recruit|job|hiring|talent|placement|offer")
 
 
 def check_text_rules(text, category=None):
     score = 0
     reasons = []
+
+    text = NEGATED_FEE_RE.sub(" ", text)
 
     if PAY_FEE_RE.search(text):
         score += 40
@@ -96,4 +102,27 @@ def check_sender_domain(sender_email_domain, company_name):
             f"to represent \"{company_name}\" — real companies use their own domain"
         ]
 
+    return 0, []
+
+
+def check_emails_in_text(raw_text, company_name):
+    """Fallback: a free-mail address that looks like a recruiter/company
+    contact (hr.xyz@gmail.com). Scan the RAW text, since redaction may mask emails."""
+    if not raw_text:
+        return 0, []
+
+    company_words = re.findall(r"[a-z0-9]+", (company_name or "").lower())
+    for m in EMAIL_RE.finditer(raw_text):
+        domain = m.group(1).lower()
+        if domain not in FREEMAIL_DOMAINS:
+            continue
+        local = m.group(0).split("@")[0].lower()
+        looks_corporate = RECRUITER_LOCAL_RE.search(local) or any(
+            w in local for w in company_words if len(w) >= 4
+        )
+        if looks_corporate:
+            return 25, [
+                f"Recruiter contact uses a free email provider ({domain}) "
+                f"— real company HR teams use their own domain"
+            ]
     return 0, []
