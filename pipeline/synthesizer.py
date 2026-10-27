@@ -1,36 +1,43 @@
 """
 Final stage: combines everything gathered so far and asks the LLM for
-the two verdicts, reasoning ONLY over the evidence provided. A few
-deterministic guardrails then stop the LLM from contradicting hard evidence.
+the two verdicts, reasoning ONLY over the evidence provided. Deterministic
+guardrails then stop the LLM from contradicting hard evidence.
 
 safety_score = scam likelihood (0 = clearly legitimate, 100 = certain scam).
 """
 import json
+import re
 from services.llm import chat_json
+
+MAX_QUESTIONS = 5
 
 SYSTEM_PROMPT = """You are judging a job/internship opportunity message for two things:
 
-1. SAFETY: is this likely a scam? Base this ONLY on the rule-based flags, URL evidence,
-   trust signals and company research given to you. Do not invent reasons.
+1. SAFETY: is THIS MESSAGE likely a scam? Base this ONLY on the rule-based flags, URL
+   evidence, trust signals and company research given to you. Do not invent reasons.
    safety_score is the scam likelihood: 0 = clearly legitimate, 100 = certain scam.
 2. WORTH IT: even if not a scam, is it a good use of a student's time / real resume value?
    Consider pay, role clarity, company legitimacy and the value notes.
 
 Evidence rules (important):
-- company_research.scam_reports_found is true ONLY if search found reports of fake
-  job/recruitment offers using this company's name. If false, never claim scam
-  reports exist for the company.
-- company_research.official_fraud_alert = true means the company itself publishes a
-  warning about recruitment impersonation. That is NOT evidence against the company.
-  At most, advise using official channels only.
-- VirusTotal "queued", "skipped" or "error" and WHOIS failures are NEUTRAL. Never list
-  them as red flags and never treat "no data" as suspicious.
+- company_research.scam_reports_found = true means scammers are known to impersonate this
+  company in fake offers. Every large company has this. It is NOT evidence that this
+  message is a scam and NOT a red flag about the company. Never list it as a red flag
+  unless the message itself shows red flags (rule flags, bad link domain, free-mail
+  recruiter, fee request). If the message looks clean, it may at most appear as a
+  question: "verify through the official careers site".
+- company_research.official_fraud_alert = true is the company's own impersonation
+  warning. Not evidence against the company.
+- VirusTotal "queued", "skipped" or "error" and WHOIS failures or missing data are
+  NEUTRAL. Never list them as red flags.
 - trust_signals.official_link_domain or official_sender_domain = true is a strong
   legitimacy signal.
-- Do not mention numeric rule scores in your reasons.
+- Missing stipend, role title or contact details is NOT a scam indicator by itself.
+  Mention it only in worth_it reasoning or in questions_to_ask.
+- Do not mention numeric rule scores.
 - Put only genuine concerns in red_flags and only genuine positives in green_flags.
-  Never put the same point in both.
-- Each item: one sentence, under 25 words.
+  Never put the same point in both. Each item: one sentence, under 25 words.
+- questions_to_ask: at most 5, most important first.
 
 If evidence is too thin to be confident, use "Can't Verify" / "Can't Tell" instead of guessing.
 
@@ -45,6 +52,14 @@ Return JSON exactly in this shape:
   "questions_to_ask": [string, ...]
 }"""
 
+# Red flags that only say "we couldn't check" are neutral, drop them.
+_NEUTRAL_RE = re.compile(
+    r"(whois|virustotal|domain registration|lookup|first-time url|queued)"
+    r".*(fail|unknown|unavailable|not available|no data|no result|unable|queued|not analy|skipped|error)"
+    r"|(fail|unknown|unable|not available).*(whois|virustotal|lookup)",
+    re.IGNORECASE,
+)
+
 
 def _dedupe(items):
     seen, out = set(), []
@@ -56,7 +71,11 @@ def _dedupe(items):
     return out
 
 
-def _guardrails(result, rule_score, trust, company_research):
+def _drop_neutral(red):
+    return [r for r in red if not _NEUTRAL_RE.search(r)]
+
+
+def _guardrails(result, rule_score, trust):
     verdict = result.get("safety_verdict")
     score = result.get("safety_score") or 0
 
@@ -70,8 +89,9 @@ def _guardrails(result, rule_score, trust, company_research):
         rule_score == 0
         and (trust.get("official_link_domain") or trust.get("official_sender_domain"))
         and not trust.get("url_flags")
-        and not company_research.get("scam_reports_found")
     ):
+        # Clean message on the company's own domain: impersonation articles
+        # about the company don't change that.
         result["safety_verdict"] = "Safe"
         result["safety_score"] = min(score, 15)
 
@@ -116,13 +136,13 @@ def synthesize(extracted, rule_score, rule_reasons, url_intel_results,
 
     red = result.pop("red_flags", None)
     if red is None:
-        red = result.get("reasons", [])  # tolerate old-shape output
+        red = result.get("reasons", [])
     green = result.pop("green_flags", [])
 
-    result = _guardrails(result, rule_score, trust, company_research)
+    result = _guardrails(result, rule_score, trust)
 
-    result["reasons"] = _dedupe(red)  # template shows `reasons` as red flags
+    result["reasons"] = _dedupe(_drop_neutral(red))  # template shows `reasons` as red flags
     result["green_flags"] = _dedupe(list(green) + green_hints)
-    result.setdefault("questions_to_ask", [])
+    result["questions_to_ask"] = (result.get("questions_to_ask") or [])[:MAX_QUESTIONS]
     result["_llm_unavailable"] = False
     return result
