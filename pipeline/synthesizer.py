@@ -11,6 +11,12 @@ from services.llm import chat_json
 
 MAX_QUESTIONS = 5
 
+DEFAULT_QUESTIONS = [
+    "Can you share the link to the official job posting on the company's careers site?",
+    "Can you send this from an official company email address?",
+    "What is the stipend/pay, duration and location of the role?",
+]
+
 SYSTEM_PROMPT = """You are judging a job/internship opportunity message for two things:
 
 1. SAFETY: is THIS MESSAGE likely a scam? Base this ONLY on the rule-based flags, URL
@@ -32,8 +38,11 @@ Evidence rules (important):
   NEUTRAL. Never list them as red flags.
 - trust_signals.official_link_domain or official_sender_domain = true is a strong
   legitimacy signal.
+- red_flags are SAFETY concerns only: signs that this message is a scam. Never put pay,
+  role quality, resume value or "unpaid" concerns there. Never assume an internship is
+  unpaid or paid unless the message says so.
 - Missing stipend, role title, sender or contact details is NOT a scam indicator by
-  itself. Mention it only in worth_it reasoning or in questions_to_ask, never in red_flags.
+  itself. Mention it only in questions_to_ask, never in red_flags.
 - Do not mention numeric rule scores.
 - Put only genuine concerns in red_flags and only genuine positives in green_flags.
   Never put the same point in both. Each item: one sentence, under 25 words.
@@ -63,7 +72,8 @@ _NEUTRAL_RE = re.compile(
 # "Missing detail" flags (no stipend, sender not given...). Not scam signals:
 # they are dropped from red flags unless there is hard rule-based evidence.
 _MISSING_RE = re.compile(
-    r"\b(no|missing|not provided|not given|not listed|unverified|absent|lacks?|without)\b"
+    r"\bunpaid\b|financial feasibility"
+    r"|\b(no|missing|not provided|not given|not listed|unverified|absent|lacks?|without)\b"
     r".*\b(stipend|pay|salary|sender|contact|e-?mail domain|role title|job title|details|channel|description)\b"
     r"|\b(stipend|pay|salary|sender|contact|e-?mail domain|role title|job title|details)\b"
     r".*\b(missing|not provided|not given|not listed|unverified|absent|unknown|is vague)\b",
@@ -81,11 +91,23 @@ def _dedupe(items):
     return out
 
 
-def _clean_red_flags(red, rule_score):
-    red = [r for r in red if not _NEUTRAL_RE.search(r)]
-    if rule_score < 30:
-        red = [r for r in red if not _MISSING_RE.search(r)]
-    return red
+def _clean_red_flags(red, rule_score=0):
+    """Missing details and 'no data' results are never scam signals."""
+    return [r for r in red if not _NEUTRAL_RE.search(r) and not _MISSING_RE.search(r)]
+
+
+def _cap_worth(result):
+    """A likely scam can't be a worthwhile opportunity."""
+    verdict = result.get("safety_verdict")
+    wscore = result.get("worth_score") or 0
+    if verdict == "Scam Likely":
+        result["worth_verdict"] = "Weak"
+        result["worth_score"] = min(wscore, 20)
+    elif verdict == "Suspicious":
+        if result.get("worth_verdict") == "Strong":
+            result["worth_verdict"] = "Decent"
+        result["worth_score"] = min(wscore, 50)
+    return result
 
 
 def _guardrails(result, rule_score, trust):
@@ -153,9 +175,10 @@ def synthesize(extracted, rule_score, rule_reasons, url_intel_results,
     green = result.pop("green_flags", [])
 
     result = _guardrails(result, rule_score, trust)
+    result = _cap_worth(result)
 
     result["reasons"] = _dedupe(_clean_red_flags(red, rule_score))  # UI shows `reasons` as red flags
     result["green_flags"] = _dedupe(list(green) + green_hints)
-    result["questions_to_ask"] = (result.get("questions_to_ask") or [])[:MAX_QUESTIONS]
+    result["questions_to_ask"] = (result.get("questions_to_ask") or DEFAULT_QUESTIONS)[:MAX_QUESTIONS]
     result["_llm_unavailable"] = False
     return result
