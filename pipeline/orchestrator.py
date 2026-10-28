@@ -21,17 +21,23 @@ from pipeline.synthesizer import synthesize
 from pipeline.reply_generator import generate_reply
 from pipeline.domain_utils import registered_domain, domain_label, company_slugs
 
-# Bare domains like careers.microsoft.com/apply (not part of an email address).
+# Email addresses are removed BEFORE link scanning, otherwise
+# "wipro.hiring2026@gmail.com" is misread as the link "wipro.hiring".
+_EMAIL_STRIP_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+
+# Bare domains like careers.microsoft.com/apply. The (?![\w@-]) after the TLD
+# stops a match from ending in the middle of a word.
 _LINK_RE = re.compile(
-    r"(?<![@\w.-])(?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?:/[^\s,;)\]]*)?",
+    r"(?<![@\w.-])(?:https?://)?(?:[a-z0-9-]+\.)+[a-z]{2,}(?![\w@-])(?:/[^\s,;)\]]*)?",
     re.IGNORECASE,
 )
 _NOT_LINKS = {"e.g", "i.e"}
 
 
 def _find_links(text):
+    flat = _EMAIL_STRIP_RE.sub(" ", " ".join((text or "").split()))
     out = []
-    for m in _LINK_RE.finditer(" ".join((text or "").split())):
+    for m in _LINK_RE.finditer(flat):
         link = m.group(0).rstrip(".")
         host = link.split("//")[-1].split("/")[0].lower()
         if host in FREEMAIL_DOMAINS or host in _NOT_LINKS or "." not in host:
@@ -50,6 +56,9 @@ def _collect_urls(extracted, clean_text, raw_text):
 
     seen, out = set(), []
     for u in urls:
+        # drop anything that is really part of an email address
+        if "@" in u:
+            continue
         key = registered_domain(u) or u.lower()
         if key and key not in seen:
             seen.add(key)
