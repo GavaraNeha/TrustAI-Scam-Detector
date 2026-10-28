@@ -1,146 +1,170 @@
-# 🛡️ TrustAI — Scam Job Detector
+# 🛡️ TrustAI — Opportunity Checker
 
-> **AI-powered web app that detects scam job messages using rule-based and heuristic analysis.**  
-> Provides a risk percentage score and plain-English explanation for every suspicious message analyzed.
+**Is this job or internship offer a scam, and is it even worth your time?**
 
-🔗 **Live Demo:** [trustai-scam-detector-1.onrender.com](https://trustai-scam-detector-1.onrender.com/)  
-📁 **Repository:** [GavaraNeha/TrustAI-Scam-Detector](https://github.com/GavaraNeha/TrustAI-Scam-Detector)
+TrustAI is a full-stack AI web app that checks job and internship messages (pasted text or a screenshot) and returns **two independent verdicts**: **Safety** (is it likely a scam?) and **Worth It** (does it add real resume value?). Every verdict comes with red flags, green flags, questions to ask the sender, web evidence, and a ready-to-send verification reply.
 
----
-
-## 📌 Problem Statement
-
-Job seekers — especially students and fresh graduates — are increasingly targeted by fraudulent job offers via WhatsApp, email, and social media. These scams often promise high pay, remote work, and easy hiring with the goal of extracting personal data or money.
-
-**TrustAI** helps users instantly verify whether a job message is legitimate or a scam, before they respond or share any personal information.
+🔗 **Live demo:** https://trustai-scam-detector-2.onrender.com
+*(Free Render tier: the first request after idle can take about 50 seconds to wake the server.)*
 
 ---
+
+## 📌 Problem
+
+Students and fresh graduates are constantly targeted by fake offers on WhatsApp, Telegram, SMS and email: "registration fees", "refundable deposits", fake HR Gmail accounts, and look-alike career sites such as `google-careers-india.xyz`. Keyword filters either miss these or flag legitimate offers, so TrustAI combines deterministic rules with live evidence and an LLM that reasons only over that evidence.
 
 ## ✨ Features
 
-| Feature | Description |
+| Feature | What it does |
 |---|---|
-| 🔍 **Scam Detection** | Analyzes job messages using rule-based and heuristic pattern matching |
-| 📊 **Risk Score** | Returns a percentage-based risk rating (e.g. 87% — High Risk) |
-| 💬 **Explanation** | Provides a human-readable reason explaining why the message was flagged |
-| 🌐 **Web Interface** | Clean, accessible UI — no installation needed |
-| ⚡ **Instant Results** | Real-time analysis with no login or signup required |
+| 🧾 **Dual verdict** | Separate **Safety** and **Worth It** scores, because a safe offer can still be a waste of time |
+| 📸 **Screenshot input** | Tesseract OCR reads offers pasted as images (WhatsApp, Telegram, email screenshots) |
+| 🔒 **PII redaction** | Personal details are stripped before anything is sent to an LLM |
+| 🚪 **Relevance gate** | Non-opportunity text (e.g. "lunch tomorrow?") is rejected before any API quota is spent |
+| 📏 **Rule engine** | Word-boundary-safe scam patterns: fees, deposits, urgency, off-platform chat, free-mail recruiters |
+| 🔗 **Link intelligence** | WHOIS domain age, VirusTotal reputation, and a check for domains that imitate the company name |
+| 🌐 **Company research** | Tavily web search for fake-offer reports and the company's official domains |
+| 🟢🔴 **Red and green flags** | Evidence-backed reasons on both sides, so a clean offer is explained, not just "no problems found" |
+| 💬 **Verification reply** | One-click copyable message to send back to the recruiter |
 
----
-
-## 🧠 How It Works
+## 🧠 How it works
 
 ```
-User pastes job message
-        ↓
-Rule-Based Engine scans for known scam patterns
-(urgency phrases, vague job titles, payment requests, etc.)
-        ↓
-Heuristic Analyzer scores linguistic and structural signals
-        ↓
-Risk Score (0–100%) + Explanation generated
-        ↓
-Result displayed to user
+Message or screenshot
+        │
+   OCR (Tesseract) ── PII redaction ── Relevance gate
+        │
+   LLM field extraction (company, links, sender, pay)
+        │
+   ┌────┴─────────────┬──────────────────┬─────────────────┐
+   Rule engine     Company research    Link checks      Value scoring
+   (regex, free-   (Tavily search,     (WHOIS age,      (pay, clarity,
+   mail, fees)     official domains)   VirusTotal,      legitimacy)
+                                       look-alike check)
+   └────┬─────────────┴──────────────────┴─────────────────┘
+        │
+   Synthesizer (Groq/Gemini) reasons ONLY over gathered evidence
+        │
+   Deterministic guardrails (a hard scam signal can't be talked down)
+        │
+   Safety verdict + Worth-It verdict + flags + questions + reply
 ```
 
-**Detection signals include:**
-- Unrealistic salary promises
-- Requests for personal/financial information upfront
-- Vague or non-existent company names
-- Urgency language ("Apply immediately", "Limited slots")
-- Grammar and formatting anomalies
-- Suspicious contact methods (WhatsApp-only, personal emails)
+**Design decisions**
+- **The LLM never invents evidence.** It sees only what the pipeline found, and "no data" results (WHOIS failed, VirusTotal queued) are treated as neutral, never as suspicious.
+- **Impersonation is not guilt.** Articles about scammers impersonating a big company do not count against that company; only reports tied to the message's own red flags do.
+- **Official-domain detection is conservative.** A link counts as official only if its exact registered domain appeared in the company's own search results (so `razorpay.com` passes and `razorpay-careers.in` fails).
+- **Guardrails override the model.** A high rule score forces *Scam Likely*; a clean message on the company's own domain is capped at *Safe*.
+- **Graceful degradation.** If the LLM is unavailable, the app falls back to a rule-based verdict instead of failing.
 
----
-
-## 🛠️ Tech Stack
+## 🛠️ Tech stack
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Python, Flask (`app.py`) |
-| **Frontend** | HTML, CSS, Jinja2 Templates |
-| **Logic Engine** | Rule-based heuristics (custom NLP patterns) |
-| **Deployment** | Render (free tier, live URL) |
-| **Version Control** | Git, GitHub |
+| Backend | Python, Flask, Gunicorn |
+| LLMs | Groq and Gemini (with model fallbacks) |
+| Search | Tavily API |
+| URL intelligence | VirusTotal API, python-whois |
+| OCR | Tesseract via pytesseract and Pillow |
+| Frontend | HTML, Tailwind CSS, vanilla JS |
+| Deployment | Docker on Render |
 
----
-
-## 🚀 Getting Started (Local Setup)
-
-### Prerequisites
-- Python 3.8+
-- pip
-
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/GavaraNeha/TrustAI-Scam-Detector.git
-cd TrustAI-Scam-Detector
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Run the app
-python app.py
-```
-
-Then open your browser at `http://localhost:5000`
-
----
-
-## 📂 Project Structure
+## 📂 Project structure
 
 ```
 TrustAI-Scam-Detector/
-│
-├── templates/
-│   └── index.html          # Frontend UI (Jinja2 template)
-│
-├── app.py                  # Flask app + detection logic
-├── requirements.txt        # Python dependencies
-├── LICENSE                 # MIT License
-└── README.md               # Project documentation
+├── app.py                  # Flask app, /analyze endpoint
+├── config.py               # env vars and model settings
+├── ocr_utils.py            # screenshot → text
+├── pipeline/
+│   ├── orchestrator.py     # runs every stage in order
+│   ├── ingest.py           # text/screenshot ingestion
+│   ├── redact.py           # PII redaction
+│   ├── relevance.py        # "is this an opportunity?" gate
+│   ├── extractor.py        # LLM field extraction
+│   ├── safety_rules.py     # regex scam rules
+│   ├── url_intel.py        # WHOIS and VirusTotal
+│   ├── company_intel.py    # Tavily company research
+│   ├── domain_utils.py     # domain normalisation helpers
+│   ├── value_scorer.py     # "worth it" context
+│   ├── synthesizer.py      # final verdicts and guardrails
+│   └── reply_generator.py  # verification reply
+├── services/
+│   ├── llm.py              # Groq/Gemini wrapper
+│   ├── search.py           # Tavily wrapper
+│   └── cache.py            # caches company lookups
+├── templates/index.html    # UI
+├── Dockerfile              # Python + Tesseract
+└── requirements.txt
 ```
 
----
+## 🚀 Run locally
 
-## 💡 Example Usage
+**Prerequisites:** Python 3.11+, [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) installed and on your PATH.
 
-**Input message:**
-> *"Congratulations! You have been selected for a Work From Home job. Earn ₹25,000/week. No experience needed. Send your Aadhaar and bank details to confirm your slot. Limited seats!"*
+```bash
+git clone https://github.com/GavaraNeha/TrustAI-Scam-Detector.git
+cd TrustAI-Scam-Detector
+pip install -r requirements.txt
+cp .env.example .env        # then fill in your keys
+python app.py
+```
 
-**TrustAI Output:**
-- 🔴 **Risk Score: 91% — Very High Risk**
-- ⚠️ **Reason:** Message contains multiple scam indicators — requests for sensitive documents, unrealistic income promise, urgency pressure, and no verifiable employer identity.
+Open http://localhost:5000.
 
----
+**Environment variables** (see `.env.example`):
 
-## 🔮 Future Enhancements
+| Variable | Used for |
+|---|---|
+| `GROQ_API_KEY` | LLM (primary) |
+| `GEMINI_API_KEY` | LLM (fallback) |
+| `TAVILY_API_KEY` | Company web search |
+| `VIRUSTOTAL_API_KEY` | Link reputation |
+| `WHOIS_API_KEY` | Domain lookups (optional) |
 
-- [ ] Machine learning model (trained on labeled scam/legit job dataset)
-- [ ] Browser extension for real-time WhatsApp / email scanning
-- [ ] Multi-language support (Hindi, Telugu, Tamil)
-- [ ] API endpoint for third-party integration
-- [ ] User feedback loop to improve detection accuracy
+`SETUP.md` and `test_apis.py` help check that each key works.
 
----
+## ☁️ Deploy (Render + Docker)
 
-## 👩‍💻 About the Developer
+1. Push the repo to GitHub.
+2. On Render: **New → Web Service**, pick the repo, set **Language: Docker**.
+3. Add the environment variables above.
+4. Deploy. The `Dockerfile` installs Tesseract and starts Gunicorn on `$PORT`.
 
-**Gavara Neha** — B.Tech in AI & Machine Learning, Aditya University  
-Passionate about building AI tools that solve real-world problems for everyday users.
+## 🧪 Example results
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue?style=flat&logo=linkedin)](https://linkedin.com)
-[![GitHub](https://img.shields.io/badge/GitHub-GavaraNeha-black?style=flat&logo=github)](https://github.com/GavaraNeha)
-[![LeetCode](https://img.shields.io/badge/LeetCode-100%2B%20Problems-orange?style=flat&logo=leetcode)](https://leetcode.com)
+| Input | Safety | Worth It |
+|---|---|---|
+| "Pay Rs 999 registration fee… WhatsApp immediately!" (fake Amazon job) | 🔴 Scam Likely 95% | Weak |
+| "Refundable deposit… contact hr.infosys.careers@gmail.com" | 🔴 Scam Likely 85–90% | Weak |
+| Apply at `google-careers-india.xyz` | 🔴 Scam Likely 80% | Weak |
+| Real Razorpay internship, `razorpay.com/jobs`, "no fees" | 🟢 Safe 0–5% | Strong 80% |
+| "Are we still meeting for lunch?" | Rejected: not an opportunity | — |
 
----
+## ⚠️ Limitations
+
+- It gives **risk signals, not legal proof**. Always verify through the company's official careers page.
+- Free API tiers apply: VirusTotal allows 4 requests/minute, and Tavily has a monthly credit cap.
+- A brand-new legitimate company with no web presence may come back as *Can't Verify* instead of *Safe*.
+- Screenshot accuracy depends on image quality.
+
+## 🔮 Roadmap
+
+- [ ] Hindi, Telugu and Tamil support
+- [ ] Browser extension for WhatsApp Web and Gmail
+- [ ] Feedback loop ("was this right?") to tune the rules
+- [ ] Public JSON API
+- [ ] Evaluation set with precision/recall tracking
+
+## 👩‍💻 About
+
+Built by **Gavara Neha**, B.Tech in AI & Machine Learning, Aditya University.
+[GitHub](https://github.com/GavaraNeha)
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+MIT. See [LICENSE](LICENSE).
 
 ---
 
-> *Built to protect job seekers from online fraud — one message at a time.*
+*Built to protect job seekers from online fraud, one message at a time.*
